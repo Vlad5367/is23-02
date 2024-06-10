@@ -2,10 +2,64 @@ import sys
 import json
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
                              QStackedWidget, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QFileDialog, QDialog,
-                             QDialogButtonBox)
+                             QDialogButtonBox, QComboBox, QCalendarWidget)
 from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QRect, QPoint, pyqtSignal, QDateTime
 from PyQt6.QtGui import QFont, QIcon, QPixmap
 
+class CalendarWidget(QWidget):
+    def init(self):
+        super().init()
+        self.notes = {}
+        self.load_notes()
+        self.initUI()
+
+    def initUI(self):
+        Calendarlayout = QVBoxLayout()
+
+        # Добавление кнопок переключения вида
+        self.view_selector = QComboBox()
+        self.view_selector.addItems(["Месяц", "Неделя"])
+        self.view_selector.currentIndexChanged.connect(self.change_view)
+        Calendarlayout.addWidget(self.view_selector)
+
+        self.calendar = QCalendarWidget()
+        self.calendar.clicked.connect(self.show_note)
+        Calendarlayout.addWidget(self.calendar)
+
+        self.note_area = QTextEdit()
+        Calendarlayout.addWidget(self.note_area)
+
+        self.save_button = QPushButton("Сохранить заметку")
+        self.save_button.clicked.connect(self.save_note)
+        Calendarlayout.addWidget(self.save_button)
+
+        self.setLayout(Calendarlayout)
+
+    def change_view(self):
+        if self.view_selector.currentText() == "Месяц":
+            self.calendar.setGridVisible(True)
+        else:
+            self.calendar.setGridVisible(False)
+
+    def show_note(self):
+        date = self.calendar.selectedDate().toString("yyyy-MM-dd")
+        self.note_area.setText(self.notes.get(date, ""))
+
+    def save_note(self):
+        date = self.calendar.selectedDate().toString("yyyy-MM-dd")
+        self.notes[date] = self.note_area.toPlainText()
+        self.save_notes()
+
+    def save_notes(self):
+        with open("notes.json", "w", encoding='utf-8') as f:
+            json.dump(self.notes, f, ensure_ascii=False, indent=4)
+
+    def load_notes(self):
+        try:
+            with open("notes.json", "r", encoding='utf-8') as f:
+                self.notes = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            self.notes = {}
 
 class Note:
     def __init__(self, title, subtitle, description, image_path=None, favorite=False, date_created=None):
@@ -69,23 +123,31 @@ class NotesWidget(QWidget):
 
             self.delete_button = QPushButton("Удалить")
             self.delete_button.setFont(QFont("Arial", 12))
-            self.delete_button.setStyleSheet("background-color: #82D19C; border-radius: 10px; padding: 10px;")
+            self.delete_button.setStyleSheet("background-color: #FF6961; border-radius: 10px; padding: 10px;")
             self.delete_button.clicked.connect(self.delete_note)
             self.note_detail_layout.addWidget(self.delete_button)
 
-            self.add_button = QPushButton("✍ Добавить")
-            self.add_button.setFont(QFont("Arial", 12))
-            self.add_button.setStyleSheet("background-color: #82D19C; border-radius: 10px; padding: 10px;")
-            self.add_button.clicked.connect(self.add_note)
-            self.note_detail_layout.addWidget(self.add_button)
+            self.favorite_button = QPushButton("☆")
+            self.favorite_button.setFont(QFont("Arial", 12))
+            self.favorite_button.setStyleSheet("background-color: #FFD700; border-radius: 10px; padding: 10px;")
+            self.favorite_button.clicked.connect(self.toggle_favorite)
+            self.note_detail_layout.addWidget(self.favorite_button)
 
             self.edit_button = QPushButton("Редактировать")
             self.edit_button.setFont(QFont("Arial", 12))
-            self.edit_button.setStyleSheet("background-color: #82D19C; border-radius: 10px; padding: 10px;")
+            self.edit_button.setStyleSheet("background-color: #FFA07A; border-radius: 10px; padding: 10px;")
             self.edit_button.clicked.connect(self.edit_note)
             self.note_detail_layout.addWidget(self.edit_button)
-            self.load_notes()
+
             main_layout.addWidget(self.note_detail_widget)
+
+            self.add_button = QPushButton("✍ Добавить")
+            self.add_button.setFont(QFont("Arial", 12))
+            self.add_button.setStyleSheet("background-color: #A8E6CF; border-radius: 10px; padding: 10px;")
+            self.add_button.clicked.connect(self.add_note)
+            main_layout.addWidget(self.add_button)
+            self.setLayout(main_layout)
+            self.load_notes()
         except Exception as e:
             print(f"Error in NotesWidget.initUI: {e}")
 
@@ -405,8 +467,7 @@ class MainWindow(QMainWindow):
                 'Главная': 'icon_home.png',
                 '   Цели': 'icon_goals.png',
                 'Конспекты': 'icon_notes.png',
-                'Календарь': 'icon_calendar.png',
-                'Помодоро': 'icon_pomodoro.png'
+                'Календарь': 'icon_calendar.png'
             }
             self.side_panel = SidePanel(logo_path, icons)
             self.side_panel.buttonClicked.connect(self.changePage)
@@ -417,8 +478,7 @@ class MainWindow(QMainWindow):
                 'Главная': QWidget(),
                 '   Цели': QWidget(),
                 'Конспекты': NotesWidget(),
-                'Календарь': QWidget(),
-                'Помодоро': QWidget()
+                'Календарь': CalendarWidget()
             }
             for page in self.pages.values():
                 self.stack.addWidget(page)
@@ -466,15 +526,14 @@ class SidePanel(QWidget):
     def initUI(self):
         try:
             self.setFixedWidth(60)
-            self.setStyleSheet("background-color: #E4E4E2; border-right: 1px solid #000000;")  # Updated
+            self.setStyleSheet("background-color: #E0E0E0;")
 
             layout = QVBoxLayout()
             self.setLayout(layout)
 
             pixmap = QPixmap(self.logo_path)
             logo_label = QLabel()
-            logo_label.setPixmap(pixmap.scaled(QSize(50, 50), Qt.AspectRatioMode.KeepAspectRatio))
-            logo_label.setStyleSheet("background-color: transparent;")
+            logo_label.setPixmap(pixmap.scaled(QSize(40, 40), Qt.AspectRatioMode.KeepAspectRatio))
             layout.addWidget(logo_label, alignment=Qt.AlignmentFlag.AlignCenter)
 
             self.buttons = {}
@@ -483,15 +542,19 @@ class SidePanel(QWidget):
                 btn.setIcon(QIcon(icon_path))
                 btn.setIconSize(QSize(24, 24))
                 btn.setToolTip(name.capitalize())
-                btn.setStyleSheet("border: none; background-color: #E4E4E2;")  # Updated
+                btn.setStyleSheet("border: none;")
                 btn.clicked.connect(lambda checked, name=name: self.buttonClicked.emit(name))
                 self.buttons[name] = btn
                 layout.addWidget(btn)
 
             layout.addStretch()
 
-            # Removed the indicator creation and addition code
-
+            self.indicator = QLabel()
+            self.indicator.setStyleSheet("background-color: #82D19C;")
+            self.indicator.setFixedWidth(10)
+            self.indicator.setFixedHeight(40)
+            self.indicator.move(50, 0)
+            self.indicator.setParent(self)
             self.active_button = None
         except Exception as e:
             print(f"Error in SidePanel.initUI: {e}")
@@ -499,13 +562,13 @@ class SidePanel(QWidget):
     def setActiveButton(self, name):
         try:
             if self.active_button:
-                self.active_button.setStyleSheet("border: none; background-color: #E4E4E2;")  # Updated
+                self.active_button.setStyleSheet("border: none;")
             btn = self.buttons[name]
-            btn.setStyleSheet("border: none; background-color: #82D19C;")  # Updated
+            btn.setStyleSheet("border: none; background-color: #82D19C;")
             self.active_button = btn
+            self.moveIndicator(btn)
         except Exception as e:
             print(f"Error in SidePanel.setActiveButton: {e}")
-
 
     def moveIndicator(self, btn):
         try:

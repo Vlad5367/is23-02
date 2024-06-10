@@ -1,16 +1,50 @@
 [
     {
-        "title": "Конспект 1",
-        "subtitle": "подзаголовок конспекта 1",
-        "description": "осписание конспекта 1",
-        "image_path": null,
-        "favorite": false
+        "title": "Введите заголовок",
+        "subtitle": "Введите подзаголовок",
+        "description": "Введите описание",
+        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/icon_goals.png",
+        "favorite": true,
+        "date_created": "2024-06-09 23:23"
     },
     {
-        "title": "рьтспиамч",
-        "subtitle": "тмспич",
-        "description": "авммяаявам",
-        "image_path": null,
-        "favorite": false
+        "title": "Введите заголовок",
+        "subtitle": "Введите подзаголовок",
+        "description": "Введите описание",
+        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/your_logo.png",
+        "favorite": true,
+        "date_created": "2024-06-09 23:57"
+    },
+    {
+        "title": "Введите заголовок",
+        "subtitle": "Введите подзаголовок",
+        "description": "Введите описание",
+        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/icon_calendar.png",
+        "favorite": false,
+        "date_created": "2024-06-09 23:53"
+    },
+    {
+        "title": "Введите заголовок",
+        "subtitle": "Введите подзаголовок",
+        "description": "Введите текст конспектам итиьбю",
+        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/icon_goals.png",
+        "favorite": false,
+        "date_created": "2024-06-10 10:57"
+    },
+    {
+        "title": "Введите заголовок",
+        "subtitle": "Введите подзаголовок",
+        "description": "Введите текст конспекта",
+        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/icon_home.png",
+        "favorite": false,
+        "date_created": "2024-06-10 10:08"
+    },
+    {
+        "title": "Введите заголовок",
+        "subtitle": "Введите подзаголовок",
+        "description": "Введите описание",
+        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/icon_pomodoro.png",
+        "favorite": false,
+        "date_created": "2024-06-10 14:24"
     }
 ]

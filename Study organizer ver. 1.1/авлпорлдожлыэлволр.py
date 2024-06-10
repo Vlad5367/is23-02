@@ -12,8 +12,9 @@ from PyQt6.QtGui import QFont, QIcon, QPixmap, QAction
 
 
 class TaskCard(QWidget):
-    def __init__(self, title, deadline, task_name, subject):
+    def __init__(self, title, deadline, task_name, subject, parent_window):
         super().__init__()
+        self.parent_window = parent_window  # Сохранение ссылки на родительское окно
         self.initUI(title, deadline, task_name, subject)
 
     def initUI(self, title, deadline, task_name, subject):
@@ -61,7 +62,7 @@ class TaskCard(QWidget):
         dialog.deadlineEdit.setDateTime(datetime.strptime(self.deadlineLabel.text(), '%d.%m.%Y %H:%M'))
         dialog.taskNameEdit.setText(self.taskNameLabel.text())
         dialog.subjectEdit.setText(self.subjectLabel.text())
-        current_category = "Задачи" if self.parentWidget() == window.tasksLayout else "В процессе"
+        current_category = "Задачи" if self.parentWidget() == self.parent_window.tasksLayout else "В процессе"
         dialog.categoryComboBox.setCurrentText(current_category)
 
         if dialog.exec():
@@ -74,22 +75,20 @@ class TaskCard(QWidget):
             if category != current_category:
                 self.setParent(None)  # Remove from the current layout
                 if category == "В процессе":
-                    window.tasksLayout.addWidget(self)
+                    self.parent_window.tasksLayout.addWidget(self)
                 else:
-                    window.inProgressLayout.addWidget(self)
+                    self.parent_window.inProgressLayout.addWidget(self)
 
-            for widget in QApplication.topLevelWidgets():
-                if isinstance(widget, MainWindow):
-                    widget.saveTasks()
-                    break
+            self.parent_window.saveTasks()
 
     def deleteTask(self):
         self.setParent(None)
-        window.saveTasks()
+        self.parent_window.saveTasks()
 
     def archiveTask(self):
-        window.archiveWindow.addArchivedTask(self)
-        window.saveTasks()
+        self.parent_window.archiveWindow.addArchivedTask(self)
+        self.parent_window.saveTasks()
+
 
 
 class AddTaskDialog(QDialog):
@@ -174,215 +173,84 @@ class ArchiveWindow(QMainWindow):
         self.tasksLayout.addWidget(task)
 
 
-class Deadlines(QMainWindow):
-    def __init__(self):
+class TaskCard(QWidget):
+    def __init__(self, title, deadline, task_name, subject, parent_window):
         super().__init__()
-        self.initUI()
-        self.archiveWindow = ArchiveWindow()
-        self.loadTasks()
-        self.initTimer()
+        self.parent_window = parent_window  # Сохранение ссылки на родительское окно
+        self.initUI(title, deadline, task_name, subject)
 
-    def initUI(self):
-        self.setWindowTitle('Задачи и дедлайны')
-        self.setGeometry(100, 100, 800, 600)
+    def initUI(self, title, deadline, task_name, subject):
+        layout = QVBoxLayout()
 
-        mainWidget = QWidget()
-        mainLayout = QVBoxLayout()
+        self.titleLabel = QLabel(title)
+        self.deadlineLabel = QLabel(deadline)
+        self.taskNameLabel = QPushButton(task_name)
+        self.taskNameLabel.setStyleSheet("background-color: #E4E4E2; border: none;")
+        self.subjectLabel = QPushButton(subject)
+        self.subjectLabel.setStyleSheet("background-color: #E4E4E2; border: none;")
 
-        headerLayout = QHBoxLayout()
+        menuButton = QPushButton("...")
+        menuButton.setFixedSize(30, 30)
+        menuButton.clicked.connect(self.showMenu)
 
-        titleLabel = QLabel("Задачи и дедлайны")
-        descriptionLabel = QLabel("Сделай каждый дедлайн достижимым. Управляй задачами с умом в Study Organizer.")
+        layout.addWidget(self.titleLabel)
+        layout.addWidget(self.deadlineLabel)
+        layout.addWidget(self.taskNameLabel)
+        layout.addWidget(self.subjectLabel)
+        layout.addWidget(menuButton)
 
-        headerRightLayout = QVBoxLayout()
-        addButton = QPushButton("Добавить")
-        addButton.setStyleSheet("""
-            QPushButton {
-                background-color: #52CC7A;
-                color: white;
-                border-radius: 15px;
-                padding: 10px 20px;
-            }
-            QPushButton:hover {
-                background-color: #45b367;
-            }
-        """)
-        addButton.clicked.connect(self.showAddTaskDialog)
-        archiveButton = QPushButton("Архив")
-        archiveButton.setStyleSheet("""
-            QPushButton {
-                background-color: #52CC7A;
-                color: white;
-                border-radius: 15px;
-                padding: 10px 20px;
-            }
-            QPushButton:hover {
-                background-color: #45b367;
-            }
-        """)
-        archiveButton.clicked.connect(self.showArchive)
+        self.setLayout(layout)
+        self.setStyleSheet("background-color: #F9F9F9; border-radius: 10px; padding: 10px;")
 
-        headerRightLayout.addWidget(addButton)
-        headerRightLayout.addWidget(archiveButton)
+    def showMenu(self):
+        menu = QMenu(self)
+        editAction = QAction('Edit', self)
+        deleteAction = QAction('Delete', self)
+        archiveAction = QAction('Archive', self)
 
-        headerLayout.addWidget(titleLabel)
-        headerLayout.addWidget(descriptionLabel)
-        headerLayout.addLayout(headerRightLayout)
+        menu.addAction(editAction)
+        menu.addAction(deleteAction)
+        menu.addAction(archiveAction)
 
-        mainLayout.addLayout(headerLayout)
+        editAction.triggered.connect(self.editTask)
+        deleteAction.triggered.connect(self.deleteTask)
+        archiveAction.triggered.connect(self.archiveTask)
 
-        contentLayout = QHBoxLayout()
+        menu.exec(self.mapToGlobal(self.sender().pos()))
 
-        tasksColumn = QVBoxLayout()
-        tasksTitle = QLabel("Задачи")
-        tasksScroll = QScrollArea()
-        tasksWidget = QWidget()
-        self.tasksLayout = QVBoxLayout()
-
-        tasksWidget.setLayout(self.tasksLayout)
-        tasksScroll.setWidget(tasksWidget)
-        tasksScroll.setWidgetResizable(True)
-
-        tasksColumn.addWidget(tasksTitle)
-        tasksColumn.addWidget(tasksScroll)
-
-        inProgressColumn = QVBoxLayout()
-        inProgressTitle = QLabel("В процессе")
-        inProgressScroll = QScrollArea()
-        inProgressWidget = QWidget()
-        self.inProgressLayout = QVBoxLayout()
-
-        inProgressWidget.setLayout(self.inProgressLayout)
-        inProgressScroll.setWidget(inProgressWidget)
-        inProgressScroll.setWidgetResizable(True)
-
-        inProgressColumn.addWidget(inProgressTitle)
-        inProgressColumn.addWidget(inProgressScroll)
-
-        contentLayout.addLayout(tasksColumn)
-        contentLayout.addLayout(inProgressColumn)
-
-        mainLayout.addLayout(contentLayout)
-
-        mainWidget.setLayout(mainLayout)
-        self.setCentralWidget(mainWidget)
-
-    def showAddTaskDialog(self):
+    def editTask(self):
         dialog = AddTaskDialog()
+        dialog.titleEdit.setText(self.titleLabel.text())
+        dialog.deadlineEdit.setDateTime(datetime.strptime(self.deadlineLabel.text(), '%d.%m.%Y %H:%M'))
+        dialog.taskNameEdit.setText(self.taskNameLabel.text())
+        dialog.subjectEdit.setText(self.subjectLabel.text())
+        current_category = "Задачи" if self.parentWidget() == self.parent_window.tasksLayout else "В процессе"
+        dialog.categoryComboBox.setCurrentText(current_category)
+
         if dialog.exec():
             title, deadline, task_name, subject, category = dialog.getTaskData()
-            task = TaskCard(title, deadline, task_name, subject)
-            if category == "Задачи":
-                self.tasksLayout.addWidget(task)
-            else:
-                self.inProgressLayout.addWidget(task)
-            self.saveTasks()
+            self.titleLabel.setText(title)
+            self.deadlineLabel.setText(deadline)
+            self.taskNameLabel.setText(task_name)
+            self.subjectLabel.setText(subject)
 
-    def showArchive(self):
-        self.archiveWindow.show()
+            if category != current_category:
+                self.setParent(None)  # Remove from the current layout
+                if category == "В процессе":
+                    self.parent_window.tasksLayout.addWidget(self)
+                else:
+                    self.parent_window.inProgressLayout.addWidget(self)
 
-    def archiveTask(self, task):
-        self.archiveWindow.addArchivedTask(task)
-        self.saveTasks()
+            self.parent_window.saveTasks()
 
-    def saveTasks(self):
-        tasks = []
-        in_progress = []
-        archived = []
+    def deleteTask(self):
+        self.setParent(None)
+        self.parent_window.saveTasks()
 
-        for i in range(self.tasksLayout.count()):
-            task = self.tasksLayout.itemAt(i).widget()
-            if task:
-                tasks.append({
-                    "title": task.titleLabel.text(),
-                    "deadline": task.deadlineLabel.text(),
-                    "task_name": task.taskNameLabel.text(),
-                    "subject": task.subjectLabel.text()
-                })
+    def archiveTask(self):
+        self.parent_window.archiveWindow.addArchivedTask(self)
+        self.parent_window.saveTasks()
 
-        for i in range(self.inProgressLayout.count()):
-            task = self.inProgressLayout.itemAt(i).widget()
-            if task:
-                in_progress.append({
-                    "title": task.titleLabel.text(),
-                    "deadline": task.deadlineLabel.text(),
-                    "task_name": task.taskNameLabel.text(),
-                    "subject": task.subjectLabel.text()
-                })
-
-        for i in range(self.archiveWindow.tasksLayout.count()):
-            task = self.archiveWindow.tasksLayout.itemAt(i).widget()
-            if task:
-                archived.append({
-                    "title": task.titleLabel.text(),
-                    "deadline": task.deadlineLabel.text(),
-                    "task_name": task.taskNameLabel.text(),
-                    "subject": task.subjectLabel.text()
-                })
-
-        data = {
-            "tasks": tasks,
-            "in_progress": in_progress,
-            "archived": archived
-        }
-
-        with open('tasks.json', 'w', encoding='utf-8') as f:
-            json.dump(data, f, ensure_ascii=False, indent=4)
-
-    def loadTasks(self):
-        try:
-            with open('tasks.json', 'r', encoding='utf-8') as f:
-                data = json.load(f)
-                for task_data in data.get("tasks", []):
-                    task = TaskCard(task_data["title"], task_data["deadline"], task_data["task_name"], task_data["subject"])
-                    self.tasksLayout.addWidget(task)
-                for task_data in data.get("in_progress", []):
-                    task = TaskCard(task_data["title"], task_data["deadline"], task_data["task_name"], task_data["subject"])
-                    self.inProgressLayout.addWidget(task)
-                for task_data in data.get("archived", []):
-                    task = TaskCard(task_data["title"], task_data["deadline"], task_data["task_name"], task_data["subject"])
-                    self.archiveWindow.addArchivedTask(task)
-        except FileNotFoundError:
-            pass
-
-    def initTimer(self):
-        self.timer = QTimer(self)
-        self.timer.timeout.connect(self.checkDeadlines)
-        self.timer.start(60)
-
-    def checkDeadlines(self):
-        current_time = datetime.now()
-        tasks_to_archive = []
-
-        for i in range(self.tasksLayout.count()):
-            task = self.tasksLayout.itemAt(i).widget()
-            if task:
-                try:
-                    deadline = datetime.strptime(task.deadlineLabel.text(), '%d.%m.%Y %H:%M')
-                    if current_time >= deadline:
-                        tasks_to_archive.append(task)
-                except ValueError:
-                    pass  # Handle invalid date format
-
-        for task in tasks_to_archive:
-            task.setParent(None)
-            self.archiveTask(task)
-
-        tasks_to_archive.clear()
-
-        for i in range(self.inProgressLayout.count()):
-            task = self.inProgressLayout.itemAt(i).widget()
-            if task:
-                try:
-                    deadline = datetime.strptime(task.deadlineLabel.text(), '%d.%m.%Y %H:%M')
-                    if current_time >= deadline:
-                        tasks_to_archive.append(task)
-                except ValueError:
-                    pass  # Handle invalid date format
-
-        for task in tasks_to_archive:
-            task.setParent(None)
-            self.archiveTask(task)
 
 class PomodoroTimer(QWidget):
     def __init__(self):
@@ -751,7 +619,7 @@ class Note:
             date_created=data.get("date_created")
         )
 
-class NotesWidget(QWidget):
+class Deadlines(QWidget):
     def __init__(self):
         super().__init__()
         self.notes = []
