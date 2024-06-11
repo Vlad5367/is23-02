@@ -6,17 +6,108 @@ from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
                              QStackedWidget, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QFileDialog, QDialog,
                              QDialogButtonBox, QMessageBox, QGridLayout, QScrollArea, QMenu, QFormLayout, QDateTimeEdit,
-                             QComboBox)
+                             QComboBox, QCalendarWidget)
 from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QRect, QPoint, pyqtSignal, QDateTime, QTimer
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QAction
 
+import json
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QCalendarWidget, QTextEdit, QPushButton
 
-class TaskCard(QWidget):
+import json
+from PyQt6.QtWidgets import QWidget, QVBoxLayout, QCalendarWidget, QTextEdit, QPushButton
+
+class CalendarWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.notes1 = {}
+        self.initUI()
+        self.load_notes_from_json()  # Load notes when the widget is initialized
+
+    def initUI(self):
+        layout = QVBoxLayout()
+
+        self.calendar = QCalendarWidget()
+        self.calendar.selectionChanged.connect(self.show_notes_for_selected_date)
+        layout.addWidget(self.calendar)
+
+        self.notes_text = QTextEdit()
+        layout.addWidget(self.notes_text)
+
+        self.save_button = QPushButton("Сохранить заметку")
+        self.save_button.clicked.connect(self.save_note_for_selected_date)
+        layout.addWidget(self.save_button)
+
+        self.setLayout(layout)
+
+        self.setStyleSheet("""
+                   QPushButton {
+                       background-color: #82D19C;
+                       color: #FFFFFF;
+                       border-radius: 5px;
+                       padding: 5px 10px;
+                   }
+                   QTextEdit {
+                       background-color: #E4E4E2;
+                       color: #000000;
+                       border-radius: 5px;
+                       padding: 5px;
+                   }
+                   QCalendarWidget QWidget {
+                       background-color: #F2F2F2;
+                       color: #000000;
+                   }
+                   QCalendarWidget QToolButton {
+                       background-color: #82D19C;
+                       color: #FFFFFF;
+                       border-radius: 5px;
+                   }
+               """)
+
+    def show_notes_for_selected_date(self):
+        selected_date = self.calendar.selectedDate().toString("yyyy-MM-dd")
+        note1 = self.notes1.get(selected_date, "")
+        self.notes_text.setText(note1)
+
+    def save_note_for_selected_date(self):
+        selected_date = self.calendar.selectedDate().toString("yyyy-MM-dd")
+        note1 = self.notes_text.toPlainText()
+        self.notes1[selected_date] = note1
+        self.save_notes_to_json()  # Save notes to file after updating the notes dictionary
+        print(f"Заметка сохранена для {selected_date}: {note1}")
+
+    def save_notes_to_json(self):
+        print("Сохраняем заметки в notes_2.json")  # Debug print statement
+        try:
+            with open('notes_2.json', 'w', encoding='utf-8') as file:
+                json.dump(self.notes1, file, ensure_ascii=False, indent=4)
+            print("Заметки успешно сохранены.")  # Debug print statement
+        except Exception as e:
+            print(f"Ошибка при сохранении заметок: {e}")  # Debug print statement
+
+    def load_notes_from_json(self):
+        print("Загружаем заметки из notes_2.json")  # Debug print statement
+        try:
+            with open('notes_2.json', 'r', encoding='utf-8') as file:
+                self.notes1 = json.load(file)
+            print("Заметки успешно загружены.")  # Debug print statement
+        except FileNotFoundError:
+            self.notes1 = {}
+            print("Файл notes_2.json не найден. Создаем новый файл.")  # Debug print statement
+        except json.JSONDecodeError:
+            print("Ошибка при чтении файла JSON. Заметки не загружены.")
+            self.notes1 = {}
+        except Exception as e:
+            print(f"Ошибка при загрузке заметок: {e}")  # Debug print statement
+            self.notes1 = {}
+
+
+
+class TaskCard(QWidget):                                     #создание виджита
     def __init__(self, title, deadline, task_name, subject):
         super().__init__()
         self.initUI(title, deadline, task_name, subject)
 
-    def initUI(self, title, deadline, task_name, subject):
+    def initUI(self, title, deadline, task_name, subject): #создание интерфейса
         layout = QVBoxLayout()
 
         self.titleLabel = QLabel(title)
@@ -41,9 +132,9 @@ class TaskCard(QWidget):
 
     def showMenu(self):
         menu = QMenu(self)
-        editAction = QAction('Edit', self)
-        deleteAction = QAction('Delete', self)
-        archiveAction = QAction('Archive', self)
+        editAction = QAction('Редактировать', self)
+        deleteAction = QAction('Удалить', self)
+        archiveAction = QAction('Добавить в архив', self)
 
         menu.addAction(editAction)
         menu.addAction(deleteAction)
@@ -362,7 +453,7 @@ class Deadlines(QMainWindow):
                     if current_time >= deadline:
                         tasks_to_archive.append(task)
                 except ValueError:
-                    pass  # Handle invalid date format
+                    pass
 
         for task in tasks_to_archive:
             task.setParent(None)
@@ -378,7 +469,7 @@ class Deadlines(QMainWindow):
                     if current_time >= deadline:
                         tasks_to_archive.append(task)
                 except ValueError:
-                    pass  # Handle invalid date format
+                    pass
 
         for task in tasks_to_archive:
             task.setParent(None)
@@ -387,8 +478,6 @@ class Deadlines(QMainWindow):
 class PomodoroTimer(QWidget):
     def __init__(self):
         super().__init__()
-
-        # Initialize quotes
         self.work_quotes = [
             "Отличная работа! Еще немного, и заслуженный отдых.",
             "Ты справляешься отлично! Скоро перерыв.",
@@ -423,17 +512,13 @@ class PomodoroTimer(QWidget):
             "Великолепная работа! Наслаждайся этим временем для отдыха и восстановления энергии."
         ]
 
-        # Initialize achievements before loading them
         self.achievements = {
             "work_sessions": 0,
             "breaks": 0,
             "completed_sessions": 0
         }
         self.load_achievements()
-
-        # Initialize UI and other components
         self.initUI()
-
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_timer)
         self.is_work_session = True
@@ -444,7 +529,6 @@ class PomodoroTimer(QWidget):
 
         timer_layout = QVBoxLayout()
 
-        # Header
         header_layout = QVBoxLayout()
         title = QLabel("Помодоро Таймер🍅", self)
         title.setFont(QFont('Arial', 24))
@@ -457,7 +541,6 @@ class PomodoroTimer(QWidget):
         header_layout.addWidget(subtitle)
         timer_layout.addLayout(header_layout)
 
-        # Timer buttons
         timer_buttons_layout = QHBoxLayout()
 
         self.start_1h_button = QPushButton('+ таймер на 1 час', self)
@@ -507,15 +590,12 @@ class PomodoroTimer(QWidget):
 
         timer_layout.addLayout(timer_buttons_layout)
 
-        # Main content
         content_layout = QHBoxLayout()
 
-        # Circle icon
         self.circle_icon = QLabel(self)
-        self.update_circle_icon('idle')  # Start with idle icon
+        self.update_circle_icon('idle')
         content_layout.addWidget(self.circle_icon)
 
-        # Session information
         session_info_layout = QVBoxLayout()
 
         self.motivation_label = QLabel("Выбери таймер и начни учебу вместе со Study Organizer", self)
@@ -547,7 +627,6 @@ class PomodoroTimer(QWidget):
 
         timer_layout.addLayout(content_layout)
 
-        # Achievements
         achievements_layout = QVBoxLayout()
         achievements_label = QLabel("Достижения", self)
         achievements_label.setFont(QFont('Arial', 18))
@@ -555,7 +634,7 @@ class PomodoroTimer(QWidget):
         achievements_layout.addWidget(achievements_label)
 
         icons_layout = QGridLayout()
-        icons_layout.setSpacing(20)  # Add spacing for better alignment
+        icons_layout.setSpacing(20)
 
         self.work_icon = QLabel(self)
         self.work_icon.setPixmap(QPixmap('work_icon.png').scaled(50, 50, Qt.AspectRatioMode.KeepAspectRatio))
@@ -590,7 +669,6 @@ class PomodoroTimer(QWidget):
         achievements_layout.addLayout(achievements_values_layout)
         timer_layout.addLayout(achievements_layout)
 
-        # Help button
         self.help_button = QPushButton('?', self)
         self.help_button.setStyleSheet("""
             QPushButton {
@@ -622,8 +700,8 @@ class PomodoroTimer(QWidget):
             self.circle_icon.setPixmap(QPixmap('idle_icon.png').scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio))
 
     def start_timer(self, hours):
-        self.work_time = hours * 3600  # Часы в секунды
-        self.remaining_time = 25 * 60  # 25 минут работы в секундах
+        self.work_time = hours * 3600
+        self.remaining_time = 25 * 60
         self.is_work_session = True
         self.update_circle_icon('work')
         self.motivation_label.setText(random.choice(self.work_quotes))
@@ -636,13 +714,13 @@ class PomodoroTimer(QWidget):
         if self.remaining_time <= 0:
             if self.is_work_session:
                 self.achievements['work_sessions'] += 1
-                self.remaining_time = 5 * 60  # 5 минут перерыв
+                self.remaining_time = 5 * 60
                 self.is_work_session = False
                 self.update_circle_icon('rest')
                 self.motivation_label.setText(random.choice(self.break_quotes))
             else:
                 self.achievements['breaks'] += 1
-                self.remaining_time = 25 * 60  # 25 минут работы
+                self.remaining_time = 25 * 60
                 self.is_work_session = True
                 self.update_circle_icon('work')
                 self.motivation_label.setText(random.choice(self.work_quotes))
@@ -1131,7 +1209,7 @@ class MainWindow(QMainWindow):
                 'Главная': QWidget(),
                 '   Цели': Deadlines(),
                 'Конспекты': NotesWidget(),
-                'Календарь': QWidget(),
+                'Календарь': CalendarWidget(),
                 'Помодоро': PomodoroTimer()
             }
             for page in self.pages.values():

@@ -6,10 +6,42 @@ from datetime import datetime
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
                              QStackedWidget, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QFileDialog, QDialog,
                              QDialogButtonBox, QMessageBox, QGridLayout, QScrollArea, QMenu, QFormLayout, QDateTimeEdit,
-                             QComboBox)
+                             QComboBox, QCalendarWidget)
 from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QRect, QPoint, pyqtSignal, QDateTime, QTimer
 from PyQt6.QtGui import QFont, QIcon, QPixmap, QAction
 
+class CalendarWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.notes = {}
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+
+        self.calendar = QCalendarWidget()
+        self.calendar.selectionChanged.connect(self.show_notes_for_selected_date)
+        layout.addWidget(self.calendar)
+
+        self.notes_text = QTextEdit()
+        layout.addWidget(self.notes_text)
+
+        self.save_button = QPushButton("Сохранить заметку")
+        self.save_button.clicked.connect(self.save_note_for_selected_date)
+        layout.addWidget(self.save_button)
+
+        self.setLayout(layout)
+
+    def show_notes_for_selected_date(self):
+        selected_date = self.calendar.selectedDate().toString("yyyy-MM-dd")
+        note = self.notes.get(selected_date, "")
+        self.notes_text.setText(note)
+
+    def save_note_for_selected_date(self):
+        selected_date = self.calendar.selectedDate().toString("yyyy-MM-dd")
+        note = self.notes_text.toPlainText()
+        self.notes[selected_date] = note
+        print(f"Заметка сохранена для {selected_date}: {note}")
 
 class TaskCard(QWidget):
     def __init__(self, title, deadline, task_name, subject):
@@ -362,7 +394,7 @@ class Deadlines(QMainWindow):
                     if current_time >= deadline:
                         tasks_to_archive.append(task)
                 except ValueError:
-                    pass  # Handle invalid date format
+                    pass
 
         for task in tasks_to_archive:
             task.setParent(None)
@@ -378,7 +410,7 @@ class Deadlines(QMainWindow):
                     if current_time >= deadline:
                         tasks_to_archive.append(task)
                 except ValueError:
-                    pass  # Handle invalid date format
+                    pass
 
         for task in tasks_to_archive:
             task.setParent(None)
@@ -387,8 +419,6 @@ class Deadlines(QMainWindow):
 class PomodoroTimer(QWidget):
     def __init__(self):
         super().__init__()
-
-        # Initialize quotes
         self.work_quotes = [
             "Отличная работа! Еще немного, и заслуженный отдых.",
             "Ты справляешься отлично! Скоро перерыв.",
@@ -423,17 +453,13 @@ class PomodoroTimer(QWidget):
             "Великолепная работа! Наслаждайся этим временем для отдыха и восстановления энергии."
         ]
 
-        # Initialize achievements before loading them
         self.achievements = {
             "work_sessions": 0,
             "breaks": 0,
             "completed_sessions": 0
         }
         self.load_achievements()
-
-        # Initialize UI and other components
         self.initUI()
-
         self.timer = QTimer()
         self.timer.timeout.connect(self.update_timer)
         self.is_work_session = True
@@ -444,7 +470,6 @@ class PomodoroTimer(QWidget):
 
         timer_layout = QVBoxLayout()
 
-        # Header
         header_layout = QVBoxLayout()
         title = QLabel("Помодоро Таймер🍅", self)
         title.setFont(QFont('Arial', 24))
@@ -457,7 +482,6 @@ class PomodoroTimer(QWidget):
         header_layout.addWidget(subtitle)
         timer_layout.addLayout(header_layout)
 
-        # Timer buttons
         timer_buttons_layout = QHBoxLayout()
 
         self.start_1h_button = QPushButton('+ таймер на 1 час', self)
@@ -507,15 +531,12 @@ class PomodoroTimer(QWidget):
 
         timer_layout.addLayout(timer_buttons_layout)
 
-        # Main content
         content_layout = QHBoxLayout()
 
-        # Circle icon
         self.circle_icon = QLabel(self)
-        self.update_circle_icon('idle')  # Start with idle icon
+        self.update_circle_icon('idle')
         content_layout.addWidget(self.circle_icon)
 
-        # Session information
         session_info_layout = QVBoxLayout()
 
         self.motivation_label = QLabel("Выбери таймер и начни учебу вместе со Study Organizer", self)
@@ -547,7 +568,6 @@ class PomodoroTimer(QWidget):
 
         timer_layout.addLayout(content_layout)
 
-        # Achievements
         achievements_layout = QVBoxLayout()
         achievements_label = QLabel("Достижения", self)
         achievements_label.setFont(QFont('Arial', 18))
@@ -555,7 +575,7 @@ class PomodoroTimer(QWidget):
         achievements_layout.addWidget(achievements_label)
 
         icons_layout = QGridLayout()
-        icons_layout.setSpacing(20)  # Add spacing for better alignment
+        icons_layout.setSpacing(20)
 
         self.work_icon = QLabel(self)
         self.work_icon.setPixmap(QPixmap('work_icon.png').scaled(50, 50, Qt.AspectRatioMode.KeepAspectRatio))
@@ -590,7 +610,6 @@ class PomodoroTimer(QWidget):
         achievements_layout.addLayout(achievements_values_layout)
         timer_layout.addLayout(achievements_layout)
 
-        # Help button
         self.help_button = QPushButton('?', self)
         self.help_button.setStyleSheet("""
             QPushButton {
@@ -622,8 +641,8 @@ class PomodoroTimer(QWidget):
             self.circle_icon.setPixmap(QPixmap('idle_icon.png').scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio))
 
     def start_timer(self, hours):
-        self.work_time = hours * 3600  # Часы в секунды
-        self.remaining_time = 25 * 60  # 25 минут работы в секундах
+        self.work_time = hours * 3600
+        self.remaining_time = 25 * 60
         self.is_work_session = True
         self.update_circle_icon('work')
         self.motivation_label.setText(random.choice(self.work_quotes))
@@ -636,13 +655,13 @@ class PomodoroTimer(QWidget):
         if self.remaining_time <= 0:
             if self.is_work_session:
                 self.achievements['work_sessions'] += 1
-                self.remaining_time = 5 * 60  # 5 минут перерыв
+                self.remaining_time = 5 * 60
                 self.is_work_session = False
                 self.update_circle_icon('rest')
                 self.motivation_label.setText(random.choice(self.break_quotes))
             else:
                 self.achievements['breaks'] += 1
-                self.remaining_time = 25 * 60  # 25 минут работы
+                self.remaining_time = 25 * 60
                 self.is_work_session = True
                 self.update_circle_icon('work')
                 self.motivation_label.setText(random.choice(self.work_quotes))
@@ -1131,7 +1150,7 @@ class MainWindow(QMainWindow):
                 'Главная': QWidget(),
                 '   Цели': Deadlines(),
                 'Конспекты': NotesWidget(),
-                'Календарь': QWidget(),
+                'Календарь': CalendarWidget(),
                 'Помодоро': PomodoroTimer()
             }
             for page in self.pages.values():

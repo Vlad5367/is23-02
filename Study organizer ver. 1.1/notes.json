@@ -1,50 +1,10 @@
 [
     {
-        "title": "Введите заголовок",
-        "subtitle": "Введите подзаголовок",
+        "title": "Конспект 1",
+        "subtitle": "Подзаголовок",
         "description": "Введите описание",
-        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/icon_goals.png",
-        "favorite": true,
-        "date_created": "2024-06-09 23:23"
-    },
-    {
-        "title": "Введите заголовок",
-        "subtitle": "Введите подзаголовок",
-        "description": "Введите описание",
-        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/your_logo.png",
-        "favorite": true,
-        "date_created": "2024-06-09 23:57"
-    },
-    {
-        "title": "Введите заголовок",
-        "subtitle": "Введите подзаголовок",
-        "description": "Введите описание",
-        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/icon_calendar.png",
+        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/work_icon.png",
         "favorite": false,
-        "date_created": "2024-06-09 23:53"
-    },
-    {
-        "title": "Введите заголовок",
-        "subtitle": "Введите подзаголовок",
-        "description": "Введите текст конспектам итиьбю",
-        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/icon_goals.png",
-        "favorite": false,
-        "date_created": "2024-06-10 10:57"
-    },
-    {
-        "title": "Введите заголовок",
-        "subtitle": "Введите подзаголовок",
-        "description": "Введите текст конспекта",
-        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/icon_home.png",
-        "favorite": false,
-        "date_created": "2024-06-10 10:08"
-    },
-    {
-        "title": "Введите заголовок",
-        "subtitle": "Введите подзаголовок",
-        "description": "Введите описание",
-        "image_path": "C:/Users/Комп/PycharmProjects/Study organizer ver. 1.1/icon_pomodoro.png",
-        "favorite": false,
-        "date_created": "2024-06-10 14:24"
+        "date_created": "2024-06-11 10:31"
     }
 ]

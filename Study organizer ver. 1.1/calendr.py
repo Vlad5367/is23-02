@@ -1,95 +1,17 @@
 import sys
-import json
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
                              QStackedWidget, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QFileDialog, QDialog,
-                             QDialogButtonBox, QComboBox, QCalendarWidget)
-from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QRect, QPoint, pyqtSignal, QDateTime
+                             QDialogButtonBox, QCalendarWidget)
+from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QRect, QPoint, pyqtSignal
 from PyQt6.QtGui import QFont, QIcon, QPixmap
 
-class CalendarWidget(QWidget):
-    def init(self):
-        super().init()
-        self.notes = {}
-        self.load_notes()
-        self.initUI()
-
-    def initUI(self):
-        Calendarlayout = QVBoxLayout()
-
-        # Добавление кнопок переключения вида
-        self.view_selector = QComboBox()
-        self.view_selector.addItems(["Месяц", "Неделя"])
-        self.view_selector.currentIndexChanged.connect(self.change_view)
-        Calendarlayout.addWidget(self.view_selector)
-
-        self.calendar = QCalendarWidget()
-        self.calendar.clicked.connect(self.show_note)
-        Calendarlayout.addWidget(self.calendar)
-
-        self.note_area = QTextEdit()
-        Calendarlayout.addWidget(self.note_area)
-
-        self.save_button = QPushButton("Сохранить заметку")
-        self.save_button.clicked.connect(self.save_note)
-        Calendarlayout.addWidget(self.save_button)
-
-        self.setLayout(Calendarlayout)
-
-    def change_view(self):
-        if self.view_selector.currentText() == "Месяц":
-            self.calendar.setGridVisible(True)
-        else:
-            self.calendar.setGridVisible(False)
-
-    def show_note(self):
-        date = self.calendar.selectedDate().toString("yyyy-MM-dd")
-        self.note_area.setText(self.notes.get(date, ""))
-
-    def save_note(self):
-        date = self.calendar.selectedDate().toString("yyyy-MM-dd")
-        self.notes[date] = self.note_area.toPlainText()
-        self.save_notes()
-
-    def save_notes(self):
-        with open("notes.json", "w", encoding='utf-8') as f:
-            json.dump(self.notes, f, ensure_ascii=False, indent=4)
-
-    def load_notes(self):
-        try:
-            with open("notes.json", "r", encoding='utf-8') as f:
-                self.notes = json.load(f)
-        except (FileNotFoundError, json.JSONDecodeError):
-            self.notes = {}
-
 class Note:
-    def __init__(self, title, subtitle, description, image_path=None, favorite=False, date_created=None):
+    def __init__(self, title, subtitle, description, image_path=None, favorite=False):
         self.title = title
         self.subtitle = subtitle
         self.description = description
         self.image_path = image_path
         self.favorite = favorite
-        self.date_created = date_created if date_created else QDateTime.currentDateTime().toString("yyyy-MM-dd hh:mm")
-
-    def to_dict(self):
-        return {
-            "title": self.title,
-            "subtitle": self.subtitle,
-            "description": self.description,
-            "image_path": self.image_path,
-            "favorite": self.favorite,
-            "date_created": self.date_created
-        }
-
-    @staticmethod
-    def from_dict(data):
-        return Note(
-            title=data["title"],
-            subtitle=data["subtitle"],
-            description=data["description"],
-            image_path=data.get("image_path"),
-            favorite=data.get("favorite", False),
-            date_created=data.get("date_created")
-        )
 
 class NotesWidget(QWidget):
     def __init__(self):
@@ -113,25 +35,17 @@ class NotesWidget(QWidget):
             self.note_image.setAlignment(Qt.AlignmentFlag.AlignCenter)
             self.note_detail_layout.addWidget(self.note_image)
 
-            self.note_title_subtitle = QLabel()
-            self.note_title_subtitle.setFont(QFont("Arial", 16))
-            self.note_detail_layout.addWidget(self.note_title_subtitle)
+            self.note_title = QLabel()
+            self.note_title.setFont(QFont("Arial", 16))
+            self.note_detail_layout.addWidget(self.note_title)
+
+            self.note_subtitle = QLabel()
+            self.note_subtitle.setFont(QFont("Arial", 14))
+            self.note_detail_layout.addWidget(self.note_subtitle)
 
             self.note_description = QTextEdit()
             self.note_description.setReadOnly(True)
             self.note_detail_layout.addWidget(self.note_description)
-
-            self.delete_button = QPushButton("Удалить")
-            self.delete_button.setFont(QFont("Arial", 12))
-            self.delete_button.setStyleSheet("background-color: #FF6961; border-radius: 10px; padding: 10px;")
-            self.delete_button.clicked.connect(self.delete_note)
-            self.note_detail_layout.addWidget(self.delete_button)
-
-            self.favorite_button = QPushButton("☆")
-            self.favorite_button.setFont(QFont("Arial", 12))
-            self.favorite_button.setStyleSheet("background-color: #FFD700; border-radius: 10px; padding: 10px;")
-            self.favorite_button.clicked.connect(self.toggle_favorite)
-            self.note_detail_layout.addWidget(self.favorite_button)
 
             self.edit_button = QPushButton("Редактировать")
             self.edit_button.setFont(QFont("Arial", 12))
@@ -146,41 +60,16 @@ class NotesWidget(QWidget):
             self.add_button.setStyleSheet("background-color: #A8E6CF; border-radius: 10px; padding: 10px;")
             self.add_button.clicked.connect(self.add_note)
             main_layout.addWidget(self.add_button)
+
             self.setLayout(main_layout)
-            self.load_notes()
         except Exception as e:
             print(f"Error in NotesWidget.initUI: {e}")
-
-    def delete_note(self):
-        try:
-            note_index = self.notes_list.currentRow()
-            if note_index >= 0 and note_index < len(self.notes):
-                del self.notes[note_index]
-                self.update_notes_list()
-                self.clear_note_details()
-                self.save_notes()
-        except Exception as e:
-            print(f"Error in NotesWidget.delete_note: {e}")
-
-    def clear_note_details(self):
-        self.note_title_subtitle.setText("")
-        self.note_description.clear()
-        self.note_image.setPixmap(QPixmap())
-
-    def toggle_favorite(self):
-        try:
-            note_index = self.notes_list.currentRow()
-            if note_index >= 0 and note_index < len(self.notes):
-                self.notes[note_index].favorite = not self.notes[note_index].favorite
-                self.update_notes_list()
-                self.save_notes()
-        except Exception as e:
-            print(f"Error in NotesWidget.toggle_favorite: {e}")
 
     def display_note(self, item):
         try:
             note = self.notes[self.notes_list.row(item)]
-            self.note_title_subtitle.setText(f"{note.title}\n{note.subtitle}")
+            self.note_title.setText(note.title)
+            self.note_subtitle.setText(note.subtitle)
             self.note_description.setPlainText(note.description)
             if note.image_path:
                 pixmap = QPixmap(note.image_path)
@@ -195,60 +84,22 @@ class NotesWidget(QWidget):
             note_index = self.notes_list.currentRow()
             if note_index >= 0 and note_index < len(self.notes):
                 note = self.notes[note_index]
-                self.note_title_subtitle.setText(f"Edit: {note.title}")
+                self.note_title.setText(f"Edit: {note.title}")
                 self.edit_note_dialog(note)
         except Exception as e:
             print(f"Ошибка: {e}")
 
     def add_note_to_list(self, note, index=None):
         try:
-            item = QListWidgetItem()
-            item.setSizeHint(QSize(400, 100))
-
-            widget_item = QWidget()
-            layout = QHBoxLayout(widget_item)
-
-            image_label = QLabel()
-            if note.image_path:
-                pixmap = QPixmap(note.image_path)
-                image_label.setPixmap(pixmap.scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio))
-            else:
-                image_label.setPixmap(
-                    QPixmap("/mnt/data/image.png").scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio))
-            image_label.setFixedSize(100, 100)
-            layout.addWidget(image_label)
-
-            text_layout = QVBoxLayout()
-            title_label = QLabel(note.title)
-            subtitle_label = QLabel(note.subtitle)
-            title_label.setFont(QFont("Arial", 12, QFont.Weight.Bold))
-            subtitle_label.setFont(QFont("Arial", 10))
-            text_layout.addWidget(title_label)
-            text_layout.addWidget(subtitle_label)
-
-            layout.addLayout(text_layout)
-
-            favorite_button = QPushButton("☆" if not note.favorite else "★")
-            favorite_button.setCheckable(True)
-            favorite_button.setChecked(note.favorite)
-            favorite_button.clicked.connect(lambda checked, n=note: self.toggle_favorite_from_button(n, checked))
-            layout.addWidget(favorite_button)
-
-            widget_item.setLayout(layout)
-            item.setSizeHint(widget_item.sizeHint())
-
+            item = QListWidgetItem(f"{note.title}\n{note.subtitle}")
+            if note.favorite:
+                item.setBackground(Qt.GlobalColor.yellow)
             if index is not None:
                 self.notes_list.insertItem(index, item)
             else:
                 self.notes_list.addItem(item)
-            self.notes_list.setItemWidget(item, widget_item)
         except Exception as e:
             print(f"Error in NotesWidget.add_note_to_list: {e}")
-
-    def toggle_favorite_from_button(self, note, is_favorite):
-        note.favorite = is_favorite
-        self.update_notes_list()
-        self.save_notes()
 
     def update_notes_list(self):
         try:
@@ -277,29 +128,8 @@ class NotesWidget(QWidget):
             dialog = NoteEditDialog(note, self)
             dialog.exec()
             self.update_notes_list()
-            self.save_notes()
         except Exception as e:
             print(f"Error in NotesWidget.edit_note_dialog: {e}")
-
-    def save_notes(self):
-        try:
-            notes_data = [note.to_dict() for note in self.notes]
-            with open("notes.json", "w", encoding="utf-8") as f:
-                json.dump(notes_data, f, ensure_ascii=False, indent=4)
-        except Exception as e:
-            print(f"Error in NotesWidget.save_notes: {e}")
-
-    def load_notes(self):
-        try:
-            with open("notes.json", "r", encoding="utf-8") as f:
-                notes_data = json.load(f)
-                self.notes = [Note.from_dict(note) for note in notes_data]
-                self.update_notes_list()
-        except FileNotFoundError:
-            self.notes = []
-        except Exception as e:
-            print(f"Error in NotesWidget.load_notes: {e}")
-
 
 class NoteEditDialog(QDialog):
     def __init__(self, note, parent=None):
@@ -309,57 +139,50 @@ class NoteEditDialog(QDialog):
 
     def initUI(self):
         try:
-            self.setWindowTitle("Редактировать заметку")
+            self.setWindowTitle('Редактировать')
             layout = QVBoxLayout(self)
 
             self.title_edit = QLineEdit(self.note.title)
-            self.title_edit.setPlaceholderText("Заголовок")
-            layout.addWidget(self.title_edit)
-
             self.subtitle_edit = QLineEdit(self.note.subtitle)
-            self.subtitle_edit.setPlaceholderText("Подзаголовок")
-            layout.addWidget(self.subtitle_edit)
-
             self.description_edit = QTextEdit(self.note.description)
-            self.description_edit.setPlaceholderText("Описание")
+
+            layout.addWidget(QLabel('Заголовок:'))
+            layout.addWidget(self.title_edit)
+            layout.addWidget(QLabel('Подзаголовок:'))
+            layout.addWidget(self.subtitle_edit)
+            layout.addWidget(QLabel('Описание:'))
             layout.addWidget(self.description_edit)
 
-            self.image_path_edit = QLineEdit(self.note.image_path if self.note.image_path else "")
-            self.image_path_edit.setPlaceholderText("Путь к изображению")
-            layout.addWidget(self.image_path_edit)
+            self.image_label = QLabel()
+            self.image_label.setFixedSize(200, 200)
+            self.image_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+            if self.note.image_path:
+                pixmap = QPixmap(self.note.image_path)
+                self.image_label.setPixmap(pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio))
+            layout.addWidget(self.image_label)
 
-            self.image_button = QPushButton("Выбрать изображение")
-            self.image_button.clicked.connect(self.select_image)
-            layout.addWidget(self.image_button)
+            self.upload_button = QPushButton("Загрузить изображение")
+            self.upload_button.clicked.connect(self.upload_image)
+            layout.addWidget(self.upload_button)
 
-            buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Save | QDialogButtonBox.StandardButton.Cancel)
-            buttons.accepted.connect(self.save_note)
-            buttons.rejected.connect(self.reject)
-            layout.addWidget(buttons)
-
-            self.setLayout(layout)
+            button_box = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+            button_box.accepted.connect(self.accept)
+            button_box.rejected.connect(self.reject)
+            layout.addWidget(button_box)
         except Exception as e:
             print(f"Error in NoteEditDialog.initUI: {e}")
 
-    def select_image(self):
+    def upload_image(self):
         try:
-            file_dialog = QFileDialog()
-            file_path, _ = file_dialog.getOpenFileName(self, "Выбрать изображение", "",
-                                                       "Images (*.png *.xpm *.jpg *.bmp *.gif)")
-            if file_path:
-                self.image_path_edit.setText(file_path)
+            file_dialog = QFileDialog(self, "Выбрать изображение", "", "Image Files (*.png *.jpg *.jpeg *.bmp)")
+            if file_dialog.exec():
+                file_path = file_dialog.selectedFiles()[0]
+                if file_path:
+                    self.note.image_path = file_path
+                    pixmap = QPixmap(file_path)
+                    self.image_label.setPixmap(pixmap.scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio))
         except Exception as e:
-            print(f"Error in NoteEditDialog.select_image: {e}")
-
-    def save_note(self):
-        try:
-            self.note.title = self.title_edit.text()
-            self.note.subtitle = self.subtitle_edit.text()
-            self.note.description = self.description_edit.toPlainText()
-            self.note.image_path = self.image_path_edit.text() if self.image_path_edit.text() else None
-            self.accept()
-        except Exception as e:
-            print(f"Error in NoteEditDialog.save_note: {e}")
+            print(f"Error in NoteEditDialog.upload_image: {e}")
 
     def accept(self):
         try:
@@ -369,6 +192,39 @@ class NoteEditDialog(QDialog):
             super().accept()
         except Exception as e:
             print(f"Error in NoteEditDialog.accept: {e}")
+
+class CalendarWidget(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.notes = {}
+        self.initUI()
+
+    def initUI(self):
+        layout = QVBoxLayout()
+
+        self.calendar = QCalendarWidget()
+        self.calendar.selectionChanged.connect(self.show_notes_for_selected_date)
+        layout.addWidget(self.calendar)
+
+        self.notes_text = QTextEdit()
+        layout.addWidget(self.notes_text)
+
+        self.save_button = QPushButton("Сохранить заметку")
+        self.save_button.clicked.connect(self.save_note_for_selected_date)
+        layout.addWidget(self.save_button)
+
+        self.setLayout(layout)
+
+    def show_notes_for_selected_date(self):
+        selected_date = self.calendar.selectedDate().toString("yyyy-MM-dd")
+        note = self.notes.get(selected_date, "")
+        self.notes_text.setText(note)
+
+    def save_note_for_selected_date(self):
+        selected_date = self.calendar.selectedDate().toString("yyyy-MM-dd")
+        note = self.notes_text.toPlainText()
+        self.notes[selected_date] = note
+        print(f"Заметка сохранена для {selected_date}: {note}")
 
 class CustomTitleBar(QWidget):
     def __init__(self, parent=None):
@@ -484,7 +340,7 @@ class MainWindow(QMainWindow):
                 self.stack.addWidget(page)
 
             content_layout.addWidget(self.stack)
-            self.changePage('home')
+            self.changePage('Главная')
         except Exception as e:
             print(f"Error in MainWindow.__init__: {e}")
 
@@ -601,7 +457,6 @@ if __name__ == '__main__':
         app = QApplication(sys.argv)
         window = MainWindow()
         window.show()
-        window.resize(1000, 800)
         sys.exit(app.exec())
     except Exception as e:
         print(f"Error in __main__: {e}")

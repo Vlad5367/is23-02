@@ -1,11 +1,712 @@
+import random
 import sys
 import json
+from datetime import datetime
+
 from PyQt6.QtWidgets import (QApplication, QMainWindow, QVBoxLayout, QHBoxLayout, QWidget, QLabel, QPushButton,
                              QStackedWidget, QLineEdit, QTextEdit, QListWidget, QListWidgetItem, QFileDialog, QDialog,
-                             QDialogButtonBox)
-from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QRect, QPoint, pyqtSignal, QDateTime
-from PyQt6.QtGui import QFont, QIcon, QPixmap
+                             QDialogButtonBox, QMessageBox, QGridLayout, QScrollArea, QMenu, QFormLayout, QDateTimeEdit,
+                             QComboBox)
+from PyQt6.QtCore import Qt, QSize, QPropertyAnimation, QRect, QPoint, pyqtSignal, QDateTime, QTimer
+from PyQt6.QtGui import QFont, QIcon, QPixmap, QAction
 
+
+class TaskCard(QWidget):
+    def __init__(self, title, deadline, task_name, subject):
+        super().__init__()
+        self.initUI(title, deadline, task_name, subject)
+
+    def initUI(self, title, deadline, task_name, subject):
+        layout = QVBoxLayout()
+
+        self.titleLabel = QLabel(title)
+        self.deadlineLabel = QLabel(deadline)
+        self.taskNameLabel = QPushButton(task_name)
+        self.taskNameLabel.setStyleSheet("background-color: #E4E4E2; border: none;")
+        self.subjectLabel = QPushButton(subject)
+        self.subjectLabel.setStyleSheet("background-color: #E4E4E2; border: none;")
+
+        menuButton = QPushButton("...")
+        menuButton.setFixedSize(30, 30)
+        menuButton.clicked.connect(self.showMenu)
+
+        layout.addWidget(self.titleLabel)
+        layout.addWidget(self.deadlineLabel)
+        layout.addWidget(self.taskNameLabel)
+        layout.addWidget(self.subjectLabel)
+        layout.addWidget(menuButton)
+
+        self.setLayout(layout)
+        self.setStyleSheet("background-color: #F9F9F9; border-radius: 10px; padding: 10px;")
+
+    def showMenu(self):
+        menu = QMenu(self)
+        editAction = QAction('Edit', self)
+        deleteAction = QAction('Delete', self)
+        archiveAction = QAction('Archive', self)
+
+        menu.addAction(editAction)
+        menu.addAction(deleteAction)
+        menu.addAction(archiveAction)
+
+        editAction.triggered.connect(self.editTask)
+        deleteAction.triggered.connect(self.deleteTask)
+        archiveAction.triggered.connect(self.archiveTask)
+
+        menu.exec(self.mapToGlobal(self.sender().pos()))
+
+    def editTask(self):
+        dialog = AddTaskDialog()
+        dialog.titleEdit.setText(self.titleLabel.text())
+        dialog.deadlineEdit.setDateTime(datetime.strptime(self.deadlineLabel.text(), '%d.%m.%Y %H:%M'))
+        dialog.taskNameEdit.setText(self.taskNameLabel.text())
+        dialog.subjectEdit.setText(self.subjectLabel.text())
+        current_category = "Задачи" if self.parentWidget() == window.tasksLayout else "В процессе"
+        dialog.categoryComboBox.setCurrentText(current_category)
+
+        if dialog.exec():
+            title, deadline, task_name, subject, category = dialog.getTaskData()
+            self.titleLabel.setText(title)
+            self.deadlineLabel.setText(deadline)
+            self.taskNameLabel.setText(task_name)
+            self.subjectLabel.setText(subject)
+
+            if category != current_category:
+                self.setParent(None)  # Remove from the current layout
+                if category == "В процессе":
+                    window.tasksLayout.addWidget(self)
+                else:
+                    window.inProgressLayout.addWidget(self)
+
+            for widget in QApplication.topLevelWidgets():
+                if isinstance(widget, MainWindow):
+                    widget.saveTasks()
+                    break
+
+    def deleteTask(self):
+        self.setParent(None)
+        window.saveTasks()
+
+    def archiveTask(self):
+        window.archiveWindow.addArchivedTask(self)
+        window.saveTasks()
+
+
+class AddTaskDialog(QDialog):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Добавить задание')
+        self.setGeometry(100, 100, 300, 300)
+
+        layout = QFormLayout()
+
+        self.titleEdit = QLineEdit()
+        self.deadlineEdit = QDateTimeEdit(calendarPopup=True)
+        self.deadlineEdit.setDateTime(datetime.now())
+        self.taskNameEdit = QLineEdit()
+        self.subjectEdit = QLineEdit()
+        self.categoryComboBox = QComboBox()
+        self.categoryComboBox.addItems(["Задачи", "В процессе"])
+
+        layout.addRow('Название:', self.titleEdit)
+        layout.addRow('Дедлайн:', self.deadlineEdit)
+        layout.addRow('Название работы:', self.taskNameEdit)
+        layout.addRow('Предмет:', self.subjectEdit)
+        layout.addRow('Категория:', self.categoryComboBox)
+
+        buttons = QDialogButtonBox(QDialogButtonBox.StandardButton.Ok | QDialogButtonBox.StandardButton.Cancel)
+        buttons.accepted.connect(self.validate)
+        buttons.rejected.connect(self.reject)
+
+        layout.addWidget(buttons)
+        self.setLayout(layout)
+
+    def validate(self):
+        if not self.titleEdit.text() or not self.deadlineEdit.text() or not self.taskNameEdit.text() or not self.subjectEdit.text():
+            QMessageBox.warning(self, "Ошибка", "Все поля должны быть заполнены")
+        else:
+            self.accept()
+
+    def getTaskData(self):
+        return (
+            self.titleEdit.text(),
+            self.deadlineEdit.dateTime().toString('dd.MM.yyyy HH:mm'),
+            self.taskNameEdit.text(),
+            self.subjectEdit.text(),
+            self.categoryComboBox.currentText()
+        )
+
+
+class ArchiveWindow(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+
+    def initUI(self):
+        self.setWindowTitle('Архив')
+        self.setGeometry(100, 100, 800, 600)
+
+        mainWidget = QWidget()
+        mainLayout = QVBoxLayout()
+
+        tasksColumn = QVBoxLayout()
+        tasksTitle = QLabel("Архив")
+        tasksScroll = QScrollArea()
+        tasksWidget = QWidget()
+        self.tasksLayout = QVBoxLayout()
+
+        tasksWidget.setLayout(self.tasksLayout)
+        tasksScroll.setWidget(tasksWidget)
+        tasksScroll.setWidgetResizable(True)
+
+        tasksColumn.addWidget(tasksTitle)
+        tasksColumn.addWidget(tasksScroll)
+
+        mainLayout.addLayout(tasksColumn)
+
+        mainWidget.setLayout(mainLayout)
+        self.setCentralWidget(mainWidget)
+
+    def addArchivedTask(self, task):
+        self.tasksLayout.addWidget(task)
+
+
+class Deadlines(QMainWindow):
+    def __init__(self):
+        super().__init__()
+        self.initUI()
+        self.archiveWindow = ArchiveWindow()
+        self.loadTasks()
+        self.initTimer()
+
+    def initUI(self):
+        self.setWindowTitle('Задачи и дедлайны')
+        self.setGeometry(100, 100, 800, 600)
+
+        mainWidget = QWidget()
+        mainLayout = QVBoxLayout()
+
+        headerLayout = QHBoxLayout()
+
+        titleLabel = QLabel("Задачи и дедлайны")
+        descriptionLabel = QLabel("Сделай каждый дедлайн достижимым. Управляй задачами с умом в Study Organizer.")
+
+        headerRightLayout = QVBoxLayout()
+        addButton = QPushButton("Добавить")
+        addButton.setStyleSheet("""
+            QPushButton {
+                background-color: #52CC7A;
+                color: white;
+                border-radius: 15px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #45b367;
+            }
+        """)
+        addButton.clicked.connect(self.showAddTaskDialog)
+        archiveButton = QPushButton("Архив")
+        archiveButton.setStyleSheet("""
+            QPushButton {
+                background-color: #52CC7A;
+                color: white;
+                border-radius: 15px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #45b367;
+            }
+        """)
+        archiveButton.clicked.connect(self.showArchive)
+
+        headerRightLayout.addWidget(addButton)
+        headerRightLayout.addWidget(archiveButton)
+
+        headerLayout.addWidget(titleLabel)
+        headerLayout.addWidget(descriptionLabel)
+        headerLayout.addLayout(headerRightLayout)
+
+        mainLayout.addLayout(headerLayout)
+
+        contentLayout = QHBoxLayout()
+
+        tasksColumn = QVBoxLayout()
+        tasksTitle = QLabel("Задачи")
+        tasksScroll = QScrollArea()
+        tasksWidget = QWidget()
+        self.tasksLayout = QVBoxLayout()
+
+        tasksWidget.setLayout(self.tasksLayout)
+        tasksScroll.setWidget(tasksWidget)
+        tasksScroll.setWidgetResizable(True)
+
+        tasksColumn.addWidget(tasksTitle)
+        tasksColumn.addWidget(tasksScroll)
+
+        inProgressColumn = QVBoxLayout()
+        inProgressTitle = QLabel("В процессе")
+        inProgressScroll = QScrollArea()
+        inProgressWidget = QWidget()
+        self.inProgressLayout = QVBoxLayout()
+
+        inProgressWidget.setLayout(self.inProgressLayout)
+        inProgressScroll.setWidget(inProgressWidget)
+        inProgressScroll.setWidgetResizable(True)
+
+        inProgressColumn.addWidget(inProgressTitle)
+        inProgressColumn.addWidget(inProgressScroll)
+
+        contentLayout.addLayout(tasksColumn)
+        contentLayout.addLayout(inProgressColumn)
+
+        mainLayout.addLayout(contentLayout)
+
+        mainWidget.setLayout(mainLayout)
+        self.setCentralWidget(mainWidget)
+
+    def showAddTaskDialog(self):
+        dialog = AddTaskDialog()
+        if dialog.exec():
+            title, deadline, task_name, subject, category = dialog.getTaskData()
+            task = TaskCard(title, deadline, task_name, subject)
+            if category == "Задачи":
+                self.tasksLayout.addWidget(task)
+            else:
+                self.inProgressLayout.addWidget(task)
+            self.saveTasks()
+
+    def showArchive(self):
+        self.archiveWindow.show()
+
+    def archiveTask(self, task):
+        self.archiveWindow.addArchivedTask(task)
+        self.saveTasks()
+
+    def saveTasks(self):
+        tasks = []
+        in_progress = []
+        archived = []
+
+        for i in range(self.tasksLayout.count()):
+            task = self.tasksLayout.itemAt(i).widget()
+            if task:
+                tasks.append({
+                    "title": task.titleLabel.text(),
+                    "deadline": task.deadlineLabel.text(),
+                    "task_name": task.taskNameLabel.text(),
+                    "subject": task.subjectLabel.text()
+                })
+
+        for i in range(self.inProgressLayout.count()):
+            task = self.inProgressLayout.itemAt(i).widget()
+            if task:
+                in_progress.append({
+                    "title": task.titleLabel.text(),
+                    "deadline": task.deadlineLabel.text(),
+                    "task_name": task.taskNameLabel.text(),
+                    "subject": task.subjectLabel.text()
+                })
+
+        for i in range(self.archiveWindow.tasksLayout.count()):
+            task = self.archiveWindow.tasksLayout.itemAt(i).widget()
+            if task:
+                archived.append({
+                    "title": task.titleLabel.text(),
+                    "deadline": task.deadlineLabel.text(),
+                    "task_name": task.taskNameLabel.text(),
+                    "subject": task.subjectLabel.text()
+                })
+
+        data = {
+            "tasks": tasks,
+            "in_progress": in_progress,
+            "archived": archived
+        }
+
+        with open('tasks.json', 'w', encoding='utf-8') as f:
+            json.dump(data, f, ensure_ascii=False, indent=4)
+
+    def loadTasks(self):
+        try:
+            with open('tasks.json', 'r', encoding='utf-8') as f:
+                data = json.load(f)
+                for task_data in data.get("tasks", []):
+                    task = TaskCard(task_data["title"], task_data["deadline"], task_data["task_name"], task_data["subject"])
+                    self.tasksLayout.addWidget(task)
+                for task_data in data.get("in_progress", []):
+                    task = TaskCard(task_data["title"], task_data["deadline"], task_data["task_name"], task_data["subject"])
+                    self.inProgressLayout.addWidget(task)
+                for task_data in data.get("archived", []):
+                    task = TaskCard(task_data["title"], task_data["deadline"], task_data["task_name"], task_data["subject"])
+                    self.archiveWindow.addArchivedTask(task)
+        except FileNotFoundError:
+            pass
+
+    def initTimer(self):
+        self.timer = QTimer(self)
+        self.timer.timeout.connect(self.checkDeadlines)
+        self.timer.start(60)
+
+    def checkDeadlines(self):
+        current_time = datetime.now()
+        tasks_to_archive = []
+
+        for i in range(self.tasksLayout.count()):
+            task = self.tasksLayout.itemAt(i).widget()
+            if task:
+                try:
+                    deadline = datetime.strptime(task.deadlineLabel.text(), '%d.%m.%Y %H:%M')
+                    if current_time >= deadline:
+                        tasks_to_archive.append(task)
+                except ValueError:
+                    pass
+
+        for task in tasks_to_archive:
+            task.setParent(None)
+            self.archiveTask(task)
+
+        tasks_to_archive.clear()
+
+        for i in range(self.inProgressLayout.count()):
+            task = self.inProgressLayout.itemAt(i).widget()
+            if task:
+                try:
+                    deadline = datetime.strptime(task.deadlineLabel.text(), '%d.%m.%Y %H:%M')
+                    if current_time >= deadline:
+                        tasks_to_archive.append(task)
+                except ValueError:
+                    pass
+
+        for task in tasks_to_archive:
+            task.setParent(None)
+            self.archiveTask(task)
+
+class PomodoroTimer(QWidget):
+    def __init__(self):
+        super().__init__()
+        self.work_quotes = [
+            "Отличная работа! Еще немного, и заслуженный отдых.",
+            "Ты справляешься отлично! Скоро перерыв.",
+            "Так держать! Осталось немного до отдыха.",
+            "Прекрасный темп! Через пару минут можно будет отдохнуть.",
+            "Молодец! Уже почти время для короткого перерыва.",
+            "Ты на высоте! Скоро можешь расслабиться.",
+            "У тебя прекрасно получается! Еще немного, и перерыв.",
+            "Супер! Еще чуть-чуть, и заслуженный отдых.",
+            "Ты справляешься великолепно! Скоро отдых.",
+            "Отличный прогресс! Через несколько минут можно отдохнуть.",
+            "Ты просто молодец! Скоро время для передышки.",
+            "Ты делаешь большие успехи! Перерыв уже близко.",
+            "Продолжай в том же духе! Через пару минут можно будет отдохнуть.",
+            "Ты великолепен! Еще немного, и заслуженный перерыв."
+        ]
+
+        self.break_quotes = [
+            "Отдыхай и наслаждайся моментом, заслуженный перерыв.",
+            "Время для отдыха и восстановления энергии. Наслаждайся этим временем.",
+            "Прекрасная работа! Приятно отдохнуть после продуктивного сеанса.",
+            "Отлично справился! Наслаждайся перерывом и зарядись новой энергией.",
+            "Время отдохнуть и расслабиться. Наслаждайся этим временем для себя.",
+            "Приятного перерыва! Это заслуженный отдых после трудного труда.",
+            "Отличная работа! Наслаждайся этим временем для отдыха и восстановления.",
+            "Приятно расслабиться после успешного сеанса. Наслаждайся этим моментом.",
+            "Отдыхай и наслаждайся этим моментом спокойствия после усердной работы.",
+            "Отличная работа! Позволь себе отдохнуть и зарядиться новой энергией.",
+            "Время насладиться моментом и отдохнуть. Ты этого заслужил.",
+            "Приятного перерыва! Это время для расслабления и восстановления сил.",
+            "Отдыхай и наслаждайся моментом покоя после продуктивного труда.",
+            "Великолепная работа! Наслаждайся этим временем для отдыха и восстановления энергии."
+        ]
+
+        self.achievements = {
+            "work_sessions": 0,
+            "breaks": 0,
+            "completed_sessions": 0
+        }
+        self.load_achievements()
+        self.initUI()
+        self.timer = QTimer()
+        self.timer.timeout.connect(self.update_timer)
+        self.is_work_session = True
+
+    def initUI(self):
+        self.setWindowTitle('Помодоро Таймер')
+        self.setGeometry(100, 100, 1000, 800)
+
+        timer_layout = QVBoxLayout()
+
+        header_layout = QVBoxLayout()
+        title = QLabel("Помодоро Таймер🍅", self)
+        title.setFont(QFont('Arial', 24))
+        title.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_layout.addWidget(title)
+
+        subtitle = QLabel("Учись эффективно: каждый помидор – шаг к успеху с Study Organizer", self)
+        subtitle.setFont(QFont('Arial', 14))
+        subtitle.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        header_layout.addWidget(subtitle)
+        timer_layout.addLayout(header_layout)
+
+        timer_buttons_layout = QHBoxLayout()
+
+        self.start_1h_button = QPushButton('+ таймер на 1 час', self)
+        self.start_1h_button.setStyleSheet("""
+            QPushButton {
+                background-color: #52CC7A;
+                color: white;
+                border-radius: 15px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #45b367;
+            }
+        """)
+        self.start_1h_button.clicked.connect(lambda: self.start_timer(1))
+        timer_buttons_layout.addWidget(self.start_1h_button)
+
+        self.start_2h_button = QPushButton('+ таймер на 2 часа', self)
+        self.start_2h_button.setStyleSheet("""
+            QPushButton {
+                background-color: #52CC7A;
+                color: white;
+                border-radius: 15px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #45b367;
+            }
+        """)
+        self.start_2h_button.clicked.connect(lambda: self.start_timer(2))
+        timer_buttons_layout.addWidget(self.start_2h_button)
+
+        self.start_4h_button = QPushButton('+ таймер на 4 часа', self)
+        self.start_4h_button.setStyleSheet("""
+            QPushButton {
+                background-color: #52CC7A;
+                color: white;
+                border-radius: 15px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #45b367;
+            }
+        """)
+        self.start_4h_button.clicked.connect(lambda: self.start_timer(4))
+        timer_buttons_layout.addWidget(self.start_4h_button)
+
+        timer_layout.addLayout(timer_buttons_layout)
+
+        content_layout = QHBoxLayout()
+
+        self.circle_icon = QLabel(self)
+        self.update_circle_icon('idle')
+        content_layout.addWidget(self.circle_icon)
+
+        session_info_layout = QVBoxLayout()
+
+        self.motivation_label = QLabel("Выбери таймер и начни учебу вместе со Study Organizer", self)
+        self.motivation_label.setFont(QFont('Arial', 16))
+        self.motivation_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        session_info_layout.addWidget(self.motivation_label)
+
+        self.time_label = QLabel("Время работы: 0:00\nДо перерыва: 0:00\nВсего осталось: 0:00", self)
+        self.time_label.setFont(QFont('Arial', 16))
+        self.time_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        session_info_layout.addWidget(self.time_label)
+
+        self.finish_button = QPushButton('завершить', self)
+        self.finish_button.setStyleSheet("""
+            QPushButton {
+                background-color: #52CC7A;
+                color: white;
+                border-radius: 15px;
+                padding: 10px 20px;
+            }
+            QPushButton:hover {
+                background-color: #45b367;
+            }
+        """)
+        self.finish_button.clicked.connect(self.confirm_finish_session)
+        session_info_layout.addWidget(self.finish_button)
+
+        content_layout.addLayout(session_info_layout)
+
+        timer_layout.addLayout(content_layout)
+
+        achievements_layout = QVBoxLayout()
+        achievements_label = QLabel("Достижения", self)
+        achievements_label.setFont(QFont('Arial', 18))
+        achievements_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        achievements_layout.addWidget(achievements_label)
+
+        icons_layout = QGridLayout()
+        icons_layout.setSpacing(20)
+
+        self.work_icon = QLabel(self)
+        self.work_icon.setPixmap(QPixmap('work_icon.png').scaled(50, 50, Qt.AspectRatioMode.KeepAspectRatio))
+        icons_layout.addWidget(self.work_icon, 0, 0, Qt.AlignmentFlag.AlignCenter)
+
+        self.break_icon = QLabel(self)
+        self.break_icon.setPixmap(QPixmap('break_icon.png').scaled(50, 50, Qt.AspectRatioMode.KeepAspectRatio))
+        icons_layout.addWidget(self.break_icon, 0, 1, Qt.AlignmentFlag.AlignCenter)
+
+        self.complete_icon = QLabel(self)
+        self.complete_icon.setPixmap(QPixmap('complete_icon.png').scaled(50, 50, Qt.AspectRatioMode.KeepAspectRatio))
+        icons_layout.addWidget(self.complete_icon, 0, 2, Qt.AlignmentFlag.AlignCenter)
+
+        achievements_layout.addLayout(icons_layout)
+
+        achievements_values_layout = QHBoxLayout()
+        self.work_sessions_label = QLabel(f"{self.achievements['work_sessions']}", self)
+        self.work_sessions_label.setFont(QFont('Arial', 16))
+        self.work_sessions_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        achievements_values_layout.addWidget(self.work_sessions_label)
+
+        self.breaks_label = QLabel(f"{self.achievements['breaks']}", self)
+        self.breaks_label.setFont(QFont('Arial', 16))
+        self.breaks_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        achievements_values_layout.addWidget(self.breaks_label)
+
+        self.completed_sessions_label = QLabel(f"{self.achievements['completed_sessions']}", self)
+        self.completed_sessions_label.setFont(QFont('Arial', 16))
+        self.completed_sessions_label.setAlignment(Qt.AlignmentFlag.AlignCenter)
+        achievements_values_layout.addWidget(self.completed_sessions_label)
+
+        achievements_layout.addLayout(achievements_values_layout)
+        timer_layout.addLayout(achievements_layout)
+
+        self.help_button = QPushButton('?', self)
+        self.help_button.setStyleSheet("""
+            QPushButton {
+                background-color: #52CC7A;
+                color: white;
+                border-radius: 15px;
+                padding: 8px 13px;
+            }
+            QPushButton:hover {
+                background-color: #45b367;
+            }
+        """)
+        self.help_button.setMaximumWidth(30)
+        self.help_button.clicked.connect(self.show_help)
+        timer_layout.addWidget(self.help_button, alignment=Qt.AlignmentFlag.AlignRight)
+
+        self.setLayout(timer_layout)
+        self.show()
+
+    def update_circle_icon(self, state):
+        if state == 'work':
+            self.circle_icon.setPixmap(QPixmap('work_icon.png').scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio))
+        elif state == 'rest':
+            self.circle_icon.setPixmap(QPixmap('break_icon.png').scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio))
+        elif state == 'complete':
+            self.circle_icon.setPixmap(
+                QPixmap('complete_icon.png').scaled(100, 100, Qt.AspectRatioMode.KeepAspectRatio))
+        else:
+            self.circle_icon.setPixmap(QPixmap('idle_icon.png').scaled(200, 200, Qt.AspectRatioMode.KeepAspectRatio))
+
+    def start_timer(self, hours):
+        self.work_time = hours * 3600
+        self.remaining_time = 25 * 60
+        self.is_work_session = True
+        self.update_circle_icon('work')
+        self.motivation_label.setText(random.choice(self.work_quotes))
+        self.timer.start(1000)
+
+    def update_timer(self):
+        self.remaining_time -= 1
+        self.work_time -= 1
+
+        if self.remaining_time <= 0:
+            if self.is_work_session:
+                self.achievements['work_sessions'] += 1
+                self.remaining_time = 5 * 60
+                self.is_work_session = False
+                self.update_circle_icon('rest')
+                self.motivation_label.setText(random.choice(self.break_quotes))
+            else:
+                self.achievements['breaks'] += 1
+                self.remaining_time = 25 * 60
+                self.is_work_session = True
+                self.update_circle_icon('work')
+                self.motivation_label.setText(random.choice(self.work_quotes))
+
+            self.work_sessions_label.setText(f"{self.achievements['work_sessions']}")
+            self.breaks_label.setText(f"{self.achievements['breaks']}")
+
+        if self.work_time <= 0:
+            self.timer.stop()
+            self.achievements['completed_sessions'] += 1
+            self.completed_sessions_label.setText(f"{self.achievements['completed_sessions']}")
+            self.update_circle_icon('complete')
+            self.motivation_label.setText("Поздравляем! Вы завершили сессию!")
+            self.time_label.setText("Время работы: 0:00\nДо перерыва: 0:00\nВсего осталось: 0:00")
+            self.save_achievements()
+
+        hours_left = int(self.work_time // 3600)
+        minutes_left = int((self.work_time % 3600) // 60)
+        self.time_label.setText(
+            f"Время работы: {hours_left}:{minutes_left:02d}\nДо перерыва: {self.remaining_time // 60}:{self.remaining_time % 60:02d}\nВсего осталось: {hours_left}:{minutes_left:02d}"
+        )
+
+    def confirm_finish_session(self):
+        confirm_dialog = QMessageBox(self)
+        confirm_dialog.setWindowTitle("Подтверждение")
+        confirm_dialog.setText("Вы уверены, что хотите завершить текущую сессию?")
+        confirm_dialog.setStandardButtons(QMessageBox.StandardButton.Yes | QMessageBox.StandardButton.No)
+        confirm_dialog.setIcon(QMessageBox.Icon.Question)
+
+        result = confirm_dialog.exec()
+        if result == QMessageBox.StandardButton.Yes:
+            self.finish_session()
+
+    def finish_session(self):
+        self.timer.stop()
+        # Достижения не добавляются при ручном завершении
+        self.update_circle_icon('idle.png')
+        self.motivation_label.setText("Сессия завершена! Отличная работа!")
+        self.time_label.setText("Время работы: 0:00\nДо перерыва: 0:00\nВсего осталось: 0:00")
+
+    def show_help(self):
+        help_dialog = QDialog(self)
+        help_dialog.setWindowTitle("Помощь")
+        help_dialog.setGeometry(100, 100, 400, 300)
+
+        help_layout = QVBoxLayout()
+        help_text = QLabel(
+            "Добро пожаловать в приложение 'Помодоро Таймер'! Вот как вы можете его использовать:\n\n"
+            "1. Выберите продолжительность таймера (1 час, 2 часа или 4 часа) для начала работы.\n"
+            "2. Следуйте циклу работы и перерывов: 25 минут работы и 5 минут перерыва.\n"
+            "3. Используйте кнопку 'завершить', чтобы завершить текущую сессию и сохранить достижения.\n"
+            "4. Просматривайте свои достижения в разделе 'Достижения'.\n\n"
+            "Наслаждайтесь эффективной учёбой!"
+        )
+        help_layout.addWidget(help_text)
+
+        close_button = QPushButton("Закрыть", help_dialog)
+        close_button.clicked.connect(help_dialog.close)
+        help_layout.addWidget(close_button)
+
+        help_dialog.setLayout(help_layout)
+        help_dialog.exec()
+
+    def closeEvent(self, event):
+        self.save_achievements()
+        event.accept()
+
+    def load_achievements(self):
+        try:
+            with open("achievements.json", "r") as file:
+                self.achievements = json.load(file)
+        except FileNotFoundError:
+            pass
+
+    def save_achievements(self):
+        with open("achievements.json", "w") as file:
+            json.dump(self.achievements, file)
 
 class Note:
     def __init__(self, title, subtitle, description, image_path=None, favorite=False, date_created=None):
@@ -415,10 +1116,10 @@ class MainWindow(QMainWindow):
             self.stack = QStackedWidget()
             self.pages = {
                 'Главная': QWidget(),
-                '   Цели': QWidget(),
+                '   Цели': Deadlines(),
                 'Конспекты': NotesWidget(),
                 'Календарь': QWidget(),
-                'Помодоро': QWidget()
+                'Помодоро': PomodoroTimer()
             }
             for page in self.pages.values():
                 self.stack.addWidget(page)
